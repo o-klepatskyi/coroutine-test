@@ -19,7 +19,7 @@
 #endif
 
 #if LOG_LEVEL >= LOG_LEVEL_INFO
-#define LogThreadId (msg) std::cout << msg << " " << std::this_thread::get_id() << "\n";
+#define LogThreadId() std::cout << __FUNCTION__ << ":" << __LINE__ << " thread id: " << std::this_thread::get_id() << "\n" 
 #else
-#define LogThreadId (msg)
+#define LogThreadId()
 #endif
