@@ -5,7 +5,6 @@
 #include <thread>
 #include <coroutine>
 
-
 template<typename T>
 struct awaiter : FutureCoro<T>
 {
@@ -57,7 +56,7 @@ public:
 };
 
 template<typename T>
-auto operator co_await(FutureCoro<T> future) noexcept
+auto operator co_await(FutureCoro<T>&& future) noexcept
 {
     return awaiter<T> { std::move(future) };
 }

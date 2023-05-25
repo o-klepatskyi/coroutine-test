@@ -4,7 +4,7 @@
 #include <coroutine>
 #include <thread>
 
-template <typename T>
+template <typename T = void>
 requires(!std::is_reference_v<T>)
 class FutureCoro
 {
@@ -64,10 +64,18 @@ public:
         other.handle = nullptr;   
     }
 
-    T get() { return fut.get(); }
+    T get()
+    {
+        if (ready()) return fut.get();
+        std::thread( [this]() mutable {
+            this->handle.resume();
+        }).detach();
+        return fut.get();
+    }
 
     void wait() const
     {
+        if (ready()) return;
         std::thread( [this]() mutable { this->handle.resume(); }).detach();
         fut.wait();
     }
@@ -138,11 +146,16 @@ public:
 
     void get()
     {
-        fut.get();
+        if (ready()) return fut.get(); 
+        std::thread( [this]() mutable {
+            handle.resume(); 
+        }).detach();
+        return fut.get();
     }
 
     void wait() const
     {
+        if (ready()) return;
         std::thread( [this]() mutable { this->handle.resume(); }).detach();
         fut.wait();
     }
