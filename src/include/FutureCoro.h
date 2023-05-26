@@ -6,7 +6,7 @@
 #include <coroutine>
 #include <thread>
 
-struct start_awaiter
+struct async_start_awaiter
 {
     bool await_ready() const noexcept { return false; }
 
@@ -18,19 +18,15 @@ struct start_awaiter
     void await_resume() const noexcept {}
 };
 
-struct final_awaiter
+struct async_final_awaiter
 {
     bool await_ready() const noexcept { return false; }
 
-    bool await_suspend(std::coroutine_handle<> handle) const noexcept {
+    void await_suspend(std::coroutine_handle<> handle) const noexcept {
         handle.destroy();
-        return true;
     }
 
-    void await_resume() const noexcept
-    {
-
-    }
+    void await_resume() const noexcept {}
 };
 
 template <typename T = void>
@@ -38,53 +34,35 @@ requires(!std::is_reference_v<T>)
 class FutureCoro
 {
 public:
-    struct promise_type
+    struct promise_type : std::promise<T>
     {
-        std::promise<T> promise;
-        std::coroutine_handle<promise_type> promiseHandle {};
 
         FutureCoro<T> get_return_object() noexcept
         {
-            promiseHandle = std::coroutine_handle<promise_type>::from_promise(*this);
-            return { promiseHandle };
-        }
-
-        ~promise_type() noexcept
-        {
-            LogInfo("~promise_type()");
+            return { std::coroutine_handle<promise_type>::from_promise(*this) };
         }
 
         auto initial_suspend() const noexcept
         {
-            return start_awaiter {};
+            return async_start_awaiter {};
         }
 
-        auto final_suspend() noexcept
+        auto final_suspend() const noexcept
         {
-            LogInfo("final_suspend");
-            destroyme();
-            return std::suspend_always {};
+            return async_final_awaiter {};
         }
 
         void return_value(T&& value)
         noexcept(std::is_nothrow_move_constructible_v<T>)
         {
-            LogInfo("return_value <T>");
-            promise.set_value(std::move(value));
-            //destroyme();
+            this->set_value(std::move(value));
         }
 
         void unhandled_exception() noexcept
         {
-            LogInfo("unhandled_exception <T>");
-            promise.set_exception(std::current_exception());
-            //destroyme();
+            this->set_exception(std::current_exception());
         }
 
-        void destroyme() noexcept
-        {
-            if (promiseHandle) promiseHandle.destroy();
-        }
     };
 
     using CoroHandle = std::coroutine_handle<promise_type>;
@@ -94,20 +72,8 @@ protected:
 public:
 
     FutureCoro(CoroHandle h) noexcept
-        : handle(h), fut(h.promise().promise.get_future())
-    {
-        LogInfo("FutureCoro<T>()");
-    }
-
-    ~FutureCoro()
-    {
-        if (handle)
-        {
-            LogInfo("WAITING ~FutureCoro<T>()");
-            //fut.wait();
-            //handle.destroy();
-        }
-    }
+        : handle(h), fut(h.promise().get_future())
+    {}
 
     FutureCoro(const FutureCoro&) = delete;
     FutureCoro& operator=(const FutureCoro&) = delete;
@@ -139,48 +105,26 @@ template <>
 class FutureCoro<void>
 {
 public:
-    struct promise_type
+    struct promise_type : std::promise<void>
     {
-        std::promise<void> promise;
-        std::coroutine_handle<promise_type> promiseHandle {};
 
         FutureCoro<void> get_return_object() noexcept
         {
-            promiseHandle = std::coroutine_handle<promise_type>::from_promise(*this);
-            return { promiseHandle };
+            return { std::coroutine_handle<promise_type>::from_promise(*this) };
         }
 
-        ~promise_type() noexcept
-        {
-            LogInfo("~promise_type()");
-        }
+        auto initial_suspend() const noexcept { return async_start_awaiter {}; }
 
-        start_awaiter initial_suspend() const noexcept { return {}; }
-
-        auto final_suspend() noexcept
-        {
-            LogInfo("final_suspend");
-            destroyme();
-            return std::suspend_always {};
-        }
+        auto final_suspend() const noexcept { return async_final_awaiter {}; }
 
         void return_void() noexcept
         {
-            LogInfo("return_void");
-            promise.set_value();
-            //destroyme();
+            this->set_value();
         }
 
         void unhandled_exception() noexcept
         {
-            LogInfo("unhandled_exception <void>");
-            promise.set_exception(std::current_exception());
-            //destroyme();
-        }
-
-        void destroyme() noexcept
-        {
-            if (promiseHandle) promiseHandle.destroy();
+            this->set_exception(std::current_exception());
         }
     };
 
@@ -191,20 +135,8 @@ protected:
 public:
 
     FutureCoro<void>(CoroHandle h) noexcept
-        : handle(h), fut(h.promise().promise.get_future())
-    {
-        LogInfo("FutureCoro<void>()");
-    }
-
-    ~FutureCoro()
-    {
-        if (handle)
-        {
-            LogInfo("WAITING ~FutureCoro<void>()");
-            //fut.wait();
-            //handle.destroy();
-        }
-    }
+        : handle(h), fut(h.promise().get_future())
+    {}
 
     FutureCoro<void>(const FutureCoro<void>&) = delete;
     FutureCoro<void>& operator=(const FutureCoro<void>&) = delete;
@@ -217,17 +149,11 @@ public:
 
     void get()
     {
-        // there are a lot of bugs that can appear if we do it this way
-        // with std::suspend_always in initial_suspend
-        // if (ready()) return fut.get(); 
-        // std::thread( [this]() mutable { handle.resume(); }).detach();
         return fut.get();
     }
 
     void wait() const
     {
-        // if (ready()) return;
-        // std::thread( [this]() mutable { this->handle.resume(); }).detach();
         fut.wait();
     }
 
