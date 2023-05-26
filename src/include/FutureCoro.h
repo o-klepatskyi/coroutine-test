@@ -1,17 +1,16 @@
 #pragma once
-#include "log.h"
+#include "ThreadPool.h"
 
 #include <future>
 #include <type_traits>
 #include <coroutine>
-#include <thread>
 
 struct async_start_awaiter
 {
     bool await_ready() const noexcept { return false; }
 
     bool await_suspend(std::coroutine_handle<> handle) const noexcept {
-        std::thread ([handle](){ handle.resume(); }).detach();
+        thread_pool::start([handle](){ handle.resume(); });
         return true;
     }
 

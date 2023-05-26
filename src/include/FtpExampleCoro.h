@@ -10,7 +10,6 @@
 #include <functional> // std::function
 #include <filesystem>
 #include <fstream>
-#include <thread>
 
 namespace kw
 {

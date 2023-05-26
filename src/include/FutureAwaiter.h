@@ -1,8 +1,6 @@
 #pragma once
 #include "FutureCoro.h"
 
-#include <future>
-#include <thread>
 #include <coroutine>
 
 template<typename T>
@@ -13,7 +11,7 @@ struct awaiter final : public FutureCoro<T>
         return this->ready();
     }
 
-    bool await_suspend(std::coroutine_handle<> cont) noexcept
+    bool await_suspend(std::coroutine_handle<>) noexcept
     {
         return false;
     }
@@ -34,9 +32,8 @@ public:
         return this->ready();
     }
 
-    bool await_suspend(std::coroutine_handle<> cont) noexcept
+    bool await_suspend(std::coroutine_handle<>) noexcept
     {
-        LogInfo("await_suspend");
         return false;
     }
 
