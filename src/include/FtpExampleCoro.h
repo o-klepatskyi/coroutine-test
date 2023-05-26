@@ -46,13 +46,14 @@ namespace kw
                                        std::function<bool(std::string_view)> predicate,
                                        std::function<void(int)> onProgress)
         {
-            LogThreadId();
+            LogInfo("Starting downloadFirstMatch");
+            LogInfo("awaiting listFiles");
             auto files = co_await listFiles(remotePath);
-            LogThreadId();
+            LogInfo("awaiting findMatchingFile");
             auto match = co_await findMatchingFile(files, std::move(predicate));
-            LogThreadId();
+            LogInfo("awaiting downloadFile");
             auto file = co_await downloadFile(match, std::move(onProgress));
-            LogThreadId();
+            LogInfo("returning from downloadFirstMatch");
             co_return file;
         }
 
@@ -60,7 +61,7 @@ namespace kw
 
         FutureCoro<std::vector<RemoteDirEntry>> listFiles(const std::string& remotePath)
         {
-            LogThreadId();
+            LogInfo("Starting listFiles");
             LogInfo("LIST %s", remotePath.c_str());
             
             if (!fs::exists(remotePath)) // failures are handled by exceptions
@@ -71,29 +72,35 @@ namespace kw
             {
                 list.emplace_back(dirEntry.path().string(), dirEntry.file_size(), dirEntry.is_regular_file());
                 const RemoteDirEntry& e = list.back();
-                if (e.isFile) LogInfo("  file %s (%zu KB)", e.path(), e.size);
-                else          LogInfo("  dir  %s", e.path());
+                if (e.isFile) { LogInfo("  file %s (%zu KB)", e.path(), e.size); }
+                else          { LogInfo("  dir  %s", e.path()); }
             }
 
             listed = list; // make a copy for the UI to use later
             listedPath = remotePath;
+            LogInfo("returning from listFiles");
             co_return list;
         }
 
         static FutureCoro<RemoteDirEntry> findMatchingFile(const std::vector<RemoteDirEntry>& list,
                                                std::function<bool(std::string_view)> predicate)
         {
-            LogThreadId();
+            LogInfo("Starting findMatchingFile");
             for (auto& e : list)
+            {
                 if (e.isFile && predicate(e.remotePath))
-                    co_return e;
+                {
+                    LogInfo("returning from findMatchingFile");
+                    co_return RemoteDirEntry { e };
+                }
+            }
+
             throw std::runtime_error{"FTP no files matched the search pattern"};
         }
 
         FutureCoro<std::string> downloadFile(const RemoteDirEntry& remoteFile,
                                  std::function<void(int)> onProgress)
         {
-            LogThreadId();
             LogInfo("DOWNLOAD %s (%zu KB)", remoteFile.path(), remoteFile.size / 1024);
             if (!remoteFile.isFile)
                 throw std::runtime_error{"FTP download failed, not a file: " + remoteFile.remotePath};
@@ -125,6 +132,7 @@ namespace kw
                     onProgress(progress); // the UI will handle synchronization
                 }
             }
+            LogInfo("Returning from downloadFile");
             co_return tempPath;
         }
     };

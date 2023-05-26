@@ -3,19 +3,26 @@
 #include "util.h"
 
 #include "gtest/gtest.h"
+#include <iostream>
+#include <chrono>
 
 TEST(FtpWithCoroutine, DownloadsFileAndReturnsName)
 {
     MemoryLeakDetector d;
     const std::string path = getProjectPath() + "/src/include";
     const std::string pattern = ".h";
+    auto predicate = [&pattern](std::string_view f) { return f.ends_with(pattern); };
     kw::FtpExampleCoro ftp;
 
     auto fileFuture = ftp.downloadFirstMatch(path,
-        [&pattern](std::string_view f) { return f.ends_with(pattern); },
-        [](int){} );
-
-    EXPECT_FALSE(fileFuture.get().empty());
+        predicate,
+        [](int progress) { LogInfo("Download: %d%%", progress); } );
+    
+    std::string file = fileFuture.get();
+    std::cout << file << "\n";
+    ASSERT_TRUE(predicate(file));
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(10ms); // wait for memory free
 }
 
 TEST(FtpWithCoroutine, ThrowsIfFileIsNotFound)
@@ -27,7 +34,7 @@ TEST(FtpWithCoroutine, ThrowsIfFileIsNotFound)
 
     auto fileFuture = ftp.downloadFirstMatch(path,
         [&pattern](std::string_view f) { return f.ends_with(pattern); },
-        [](int){} );
+        [](int progress) { LogInfo("Download: %d%%", progress); } );
 
     EXPECT_THROW(fileFuture.get(), std::exception);
 }
@@ -41,7 +48,7 @@ TEST(FtpWithCoroutine, ThrowsIfDirectoryIsNotFound)
 
     auto fileFuture = ftp.downloadFirstMatch(path,
         [&pattern](std::string_view f) { return f.ends_with(pattern); },
-        [](int){} );
+        [](int progress) { LogInfo("Download: %d%%", progress); } );
 
     EXPECT_THROW(fileFuture.get(), std::exception);
 }

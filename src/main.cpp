@@ -4,13 +4,16 @@
 #include "FutureAwaiter.h"
 #include "FutureCoro.h"
 
+#include <chrono>
+#include <thread>
+
 FutureCoro<void> useCoro(const std::string& path, const std::string& pattern) noexcept
 {
-    LogThreadId();
+    LogInfo("Starting useCoro");
     try
     {
 	    kw::FtpExampleCoro ftp;
-
+        LogInfo("Awaiting ftp.downloadFirstMatch");
 	    auto file = co_await ftp.downloadFirstMatch(path,
 			[&pattern](std::string_view f) { return f.ends_with(pattern); },
 	        [](int progress) { LogInfo("Download: %d%%", progress); });
@@ -26,10 +29,18 @@ FutureCoro<void> useCoro(const std::string& path, const std::string& pattern) no
 
 int main(int, char**)
 {
-    LogThreadId();
+    LogInfo("Starting program");
     const std::string path = getProjectPath() + "/src/include";
     const std::string pattern = ".h";
-    useCoro(path, pattern).wait();
+
+    auto fut = useCoro(path, pattern);
+
+    while(not fut.ready())
+    {
+        LogInfo("Doing my job...");
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(10ms);
+    }  
 
     return 0;
 }

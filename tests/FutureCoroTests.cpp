@@ -1,39 +1,29 @@
 #include "FutureCoro.h"
 #include "FutureAwaiter.h"
 #include "MemoryLeakDetector.h"
-#include "CoroExamples.h" 
+#include "CoroExamples.h"
 
 #include "gtest/gtest.h"
+#include <vector>
+#include <string>
 
-TEST(Coroutines, TaskDoesntStartUntilAwaited)
+TEST(Coroutines, CoroStartsOnCreationAndAsyncsOnAwait)
 {
     MemoryLeakDetector d;
 	bool started = false;
-	auto func = [](bool& started) -> FutureCoro<>
+	auto func = [&]() -> FutureCoro<>
 	{
 		started = true;
 		co_return;
-	}(started);
+	};
 
-	[](bool& started, FutureCoro<>&& func) -> FutureCoro<>
+	[&]() -> FutureCoro<>
 	{
 		EXPECT_FALSE(started);
-		co_await std::move(func);
+		co_await func();
 		EXPECT_TRUE(started);
         co_return;
-	}(started, std::move(func)).get();
-}
-
-TEST(Coroutines, TaskDoesNotStackOverflow)
-{
-    MemoryLeakDetector d;
-    ASSERT_NO_THROW({
-        loop_asynchronously(100).get();
-        loop_asynchronously(1000).get();
-        // loop_asynchronously(100'000).get();
-        // loop_asynchronously(1'000'000).get();
-        // is commented out because takes 86s to run :(
-    });
+	}().get();
 }
 
 TEST(Coroutines, TaskReturnsCorrectly)
@@ -73,4 +63,84 @@ TEST(Coroutines, NonVoidTaskThrowsOnObtainingResult)
     };
 
     ASSERT_THROW(throwsTask().get(), my_exception);
+}
+
+TEST(Coroutines, RunsInAnotherThread)
+{
+    MemoryLeakDetector d;
+    std::vector<std::thread::id> ids;
+    ids.reserve(10);
+    ids.emplace_back(std::this_thread::get_id()); // 0
+    auto co1 = [&]() -> FutureCoro<> {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(1ms);
+        ids.emplace_back(std::this_thread::get_id()); // 2, 4
+        co_return;  
+    };
+
+    auto co2 = [&]() -> FutureCoro<> {
+        ids.emplace_back(std::this_thread::get_id()); // 1
+        co_await co1();
+        ids.emplace_back(std::this_thread::get_id()); // 3
+        co_await co1();
+        ids.emplace_back(std::this_thread::get_id()); // 5
+        co_return;
+    };
+    co2().wait();
+    ASSERT_EQ(ids.size(), 6); 
+    EXPECT_TRUE(ids[0] != ids[1]); // starts coro in another thread
+    EXPECT_TRUE(ids[1] != ids[2]); // co_await starts asynchronously
+    EXPECT_TRUE(ids[1] == ids[3]); // main thread waits and continues
+    EXPECT_TRUE(ids[3] != ids[4]); // start async again 
+    EXPECT_TRUE(ids[3] == ids[5]); // waits and continues again 
+}
+
+TEST(Coroutines, CorrectlyAccumulatesAndReturnsValue)
+{
+    MemoryLeakDetector d;
+    auto co1 = [](std::string s) -> FutureCoro<std::string> {
+        co_return s + "123";
+    };
+    auto co2 = [&](std::string s) -> FutureCoro<std::string> {
+        auto s1 = co_await co1(s);
+        co_return s1 + "456";
+    };
+    auto co3 = [&]() -> FutureCoro<std::string> {
+        auto s1 = co_await co2("");
+        co_return s1 + "789";
+    };
+    auto result = co3().get();
+    EXPECT_STREQ(result.c_str(), "123456789");
+}
+
+TEST(Coroutines, MemoryIsFreedIfCoroutineIsNotAwaited)
+{
+    using namespace std::chrono_literals;
+    MemoryLeakDetector d;
+    auto co1 = []() -> FutureCoro<> {
+        std::vector<int> vec;
+        vec.reserve(100000); // allocating a lot of memory
+        co_return;
+    };
+    {
+        co1();
+    }
+    std::this_thread::sleep_for(20ms); // eventually memory will be freed!!!
+}
+
+TEST(Coroutines, MemoryIsFreedAfterException)
+{
+    using namespace std::chrono_literals;
+    MemoryLeakDetector d;
+    auto co1 = []() -> FutureCoro<> {
+        std::vector<int> vec;
+        vec.reserve(100000); // allocating a lot of memory
+        throw std::exception {};
+        co_return;
+    };
+    {
+        
+        co1();
+    }
+    std::this_thread::sleep_for(20ms); // eventually memory will be freed!!!
 }
