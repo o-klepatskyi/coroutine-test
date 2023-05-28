@@ -1,6 +1,6 @@
 #pragma once
 #include "ThreadPool.h"
-
+#include "log.h"
 #include <future>
 #include <type_traits>
 #include <coroutine>
@@ -10,7 +10,10 @@ struct async_start_awaiter
     bool await_ready() const noexcept { return false; }
 
     bool await_suspend(std::coroutine_handle<> handle) const noexcept {
-        thread_pool::start([handle](){ handle.resume(); });
+        thread_pool::start([handle]() {
+            handle.resume();
+            LogInfo("finished execution!");
+        });
         return true;
     }
 
@@ -35,6 +38,8 @@ class FutureCoro
 public:
     struct promise_type : std::promise<T>
     {
+        std::exception_ptr ex = nullptr;
+        T result {};
 
         FutureCoro<T> get_return_object() noexcept
         {
@@ -46,20 +51,34 @@ public:
             return async_start_awaiter {};
         }
 
-        auto final_suspend() const noexcept
+        auto final_suspend() noexcept
         {
-            return async_final_awaiter {};
+            LogInfo("final suspend...");
+            if (ex)
+            {
+                this->set_exception(ex);
+            } else
+            {
+                this->set_value(result);
+            }
+            return std::suspend_always {};
+        }
+
+        void return_value(const T& value)
+        noexcept(std::is_nothrow_copy_assignable<T>)
+        {
+            result = value;
         }
 
         void return_value(T&& value)
         noexcept(std::is_nothrow_move_constructible_v<T>)
         {
-            this->set_value(std::move(value));
+            result = std::move(value);
         }
 
         void unhandled_exception() noexcept
         {
-            this->set_exception(std::current_exception());
+            ex = std::current_exception();
         }
 
     };
@@ -67,11 +86,11 @@ public:
     using CoroHandle = std::coroutine_handle<promise_type>;
 protected:
     CoroHandle handle;
-    std::future<T> fut;
+    std::shared_future<T> fut;
 public:
 
     FutureCoro(CoroHandle h) noexcept
-        : handle(h), fut(h.promise().get_future())
+        : handle(h), fut(h.promise().get_future().share())
     {}
 
     FutureCoro(const FutureCoro&) = delete;
@@ -80,7 +99,17 @@ public:
     FutureCoro(FutureCoro&& other) noexcept
         : handle(other.handle), fut(std::move(other.fut))
     {
-        other.handle = nullptr;   
+        other.handle = nullptr;
+    }
+
+    ~FutureCoro() noexcept
+    {
+        if (handle && fut.valid())
+        {
+            LogInfo("destroying...");
+            fut.wait();
+            handle.destroy();
+        }
     }
 
     T get()
@@ -106,6 +135,7 @@ class FutureCoro<void>
 public:
     struct promise_type : std::promise<void>
     {
+        std::exception_ptr ex = nullptr;
 
         FutureCoro<void> get_return_object() noexcept
         {
@@ -114,27 +144,38 @@ public:
 
         auto initial_suspend() const noexcept { return async_start_awaiter {}; }
 
-        auto final_suspend() const noexcept { return async_final_awaiter {}; }
+        auto final_suspend() noexcept
+        {
+            LogInfo("final suspend...");
+            if (ex)
+            {
+                this->set_exception(ex);
+            } else
+            {
+                this->set_value();
+            }
+            return std::suspend_always {};
+        }
 
         void return_void() noexcept
         {
-            this->set_value();
+            
         }
 
         void unhandled_exception() noexcept
         {
-            this->set_exception(std::current_exception());
+            ex = std::current_exception();
         }
     };
 
     using CoroHandle = std::coroutine_handle<promise_type>;
 protected:
     CoroHandle handle;
-    std::future<void> fut;
+    std::shared_future<void> fut;
 public:
 
     FutureCoro<void>(CoroHandle h) noexcept
-        : handle(h), fut(h.promise().get_future())
+        : handle(h), fut(h.promise().get_future().share())
     {}
 
     FutureCoro<void>(const FutureCoro<void>&) = delete;
@@ -146,9 +187,19 @@ public:
         other.handle = nullptr;   
     }
 
+    ~FutureCoro() noexcept
+    {
+        if (handle && fut.valid())
+        {
+            LogInfo("destroying...");
+            fut.wait();
+            handle.destroy();
+        }
+    }
+
     void get()
     {
-        return fut.get();
+        fut.get();
     }
 
     void wait() const

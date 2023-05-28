@@ -37,7 +37,7 @@ int main(int, char**)
 
     while(not fut.ready())
     {
-        LogInfo("Doing my job...");
+        //LogInfo("Doing my job...");
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(1ms);
     }  

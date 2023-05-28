@@ -6,6 +6,7 @@
 #include "gtest/gtest.h"
 #include <vector>
 #include <string>
+#include <cassert>
 
 TEST(Coroutines, CoroStartsOnCreationAndAsyncsOnAwait)
 {
@@ -49,8 +50,7 @@ TEST(Coroutines, VoidTaskThrowsOnExecution)
     auto throwsTask = []() -> FutureCoro<> {
         throw my_exception {};
     };
-    ASSERT_THROW({ throwsTask().get(); },
-        my_exception);
+    ASSERT_THROW({ throwsTask().get(); }, my_exception);
 }
 
 TEST(Coroutines, NonVoidTaskThrowsOnObtainingResult)
@@ -122,10 +122,7 @@ TEST(Coroutines, MemoryIsFreedIfCoroutineIsNotAwaited)
         vec.reserve(100000); // allocating a lot of memory
         co_return;
     };
-    {
-        co1();
-    }
-    std::this_thread::sleep_for(20ms); // eventually memory will be freed!!!
+    co1();
 }
 
 TEST(Coroutines, MemoryIsFreedAfterException)
@@ -138,9 +135,35 @@ TEST(Coroutines, MemoryIsFreedAfterException)
         throw std::exception {};
         co_return;
     };
-    {
-        
-        co1();
-    }
-    std::this_thread::sleep_for(20ms); // eventually memory will be freed!!!
+    co1();
+}
+
+TEST(Coroutines, ensure_destructors_are_called_sequentially)
+{
+    MemoryLeakDetector d;
+    std::vector<int> destructor_ids = destructor_sequence_coro().get();
+    ASSERT_EQ(destructor_ids.size(), 3u);
+    ASSERT_EQ(destructor_ids[0], 1);
+    ASSERT_EQ(destructor_ids[1], 2);
+    ASSERT_EQ(destructor_ids[2], 3);
+}
+
+TEST(Coroutines, MemoryIsFreedWithRecursion)
+{
+    MemoryLeakDetector d;
+    EXPECT_EQ(fibCoro(10).get(), 55);
+    // with bigger numbers system_error is thrown
+    // I assume there are no more threads awailable
+    fibCoro(14).get();
+}
+
+TEST(Coroutines, CorrectlyModifiesByRef)
+{
+    std::string str = "coro";
+    auto modify = [](std::string& str) -> FutureCoro<void> {
+        str += "utine";
+        co_return;
+    }(str);
+    EXPECT_NO_THROW({ modify.get(); });
+    EXPECT_STREQ("coroutine", str.c_str());
 }
