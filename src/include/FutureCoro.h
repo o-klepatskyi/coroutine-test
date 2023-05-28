@@ -9,8 +9,9 @@ struct async_start_awaiter
 {
     bool await_ready() const noexcept { return false; }
 
-    bool await_suspend(std::coroutine_handle<> handle) const noexcept {
-        thread_pool::start([handle]() {
+    bool await_suspend(std::coroutine_handle<> handle) const noexcept
+    {
+        GlobalThreadPool.submit([handle]() {
             handle.resume();
             LogInfo("finished execution!");
         });
@@ -24,7 +25,8 @@ struct async_final_awaiter
 {
     bool await_ready() const noexcept { return false; }
 
-    void await_suspend(std::coroutine_handle<> handle) const noexcept {
+    void await_suspend(std::coroutine_handle<> handle) const noexcept
+    {
         handle.destroy();
     }
 
@@ -32,23 +34,23 @@ struct async_final_awaiter
 };
 
 template <typename T = void>
-requires(!std::is_reference_v<T>)
+    requires(!std::is_reference_v<T>)
 class FutureCoro
 {
 public:
     struct promise_type : std::promise<T>
     {
         std::exception_ptr ex = nullptr;
-        T result {};
+        T result{};
 
         FutureCoro<T> get_return_object() noexcept
         {
-            return { std::coroutine_handle<promise_type>::from_promise(*this) };
+            return {std::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
         auto initial_suspend() const noexcept
         {
-            return async_start_awaiter {};
+            return async_start_awaiter{};
         }
 
         auto final_suspend() noexcept
@@ -57,23 +59,23 @@ public:
             if (ex)
             {
                 this->set_exception(ex);
-            } else
+            }
+            else
             {
                 this->set_value(result);
             }
-            return std::suspend_always {};
+            return std::suspend_always{};
         }
 
-        void return_value(const T& value)
+        void return_value(const T &value)
 #if _MSC_VER
-        noexcept(std::is_nothrow_copy_assignable<T>)
+            noexcept(std::is_nothrow_copy_assignable<T>)
 #endif
         {
             result = value;
         }
 
-        void return_value(T&& value)
-        noexcept(std::is_nothrow_move_constructible_v<T>)
+        void return_value(T &&value) noexcept(std::is_nothrow_move_constructible_v<T>)
         {
             result = std::move(value);
         }
@@ -82,23 +84,24 @@ public:
         {
             ex = std::current_exception();
         }
-
     };
 
     using CoroHandle = std::coroutine_handle<promise_type>;
+
 protected:
     CoroHandle handle;
     std::shared_future<T> fut;
-public:
 
+public:
     FutureCoro(CoroHandle h) noexcept
         : handle(h), fut(h.promise().get_future().share())
-    {}
+    {
+    }
 
-    FutureCoro(const FutureCoro&) = delete;
-    FutureCoro& operator=(const FutureCoro&) = delete;
+    FutureCoro(const FutureCoro &) = delete;
+    FutureCoro &operator=(const FutureCoro &) = delete;
 
-    FutureCoro(FutureCoro&& other) noexcept
+    FutureCoro(FutureCoro &&other) noexcept
         : handle(other.handle), fut(std::move(other.fut))
     {
         other.handle = nullptr;
@@ -141,10 +144,10 @@ public:
 
         FutureCoro<void> get_return_object() noexcept
         {
-            return { std::coroutine_handle<promise_type>::from_promise(*this) };
+            return {std::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
-        auto initial_suspend() const noexcept { return async_start_awaiter {}; }
+        auto initial_suspend() const noexcept { return async_start_awaiter{}; }
 
         auto final_suspend() noexcept
         {
@@ -152,16 +155,16 @@ public:
             if (ex)
             {
                 this->set_exception(ex);
-            } else
+            }
+            else
             {
                 this->set_value();
             }
-            return std::suspend_always {};
+            return std::suspend_always{};
         }
 
         void return_void() noexcept
         {
-            
         }
 
         void unhandled_exception() noexcept
@@ -171,22 +174,24 @@ public:
     };
 
     using CoroHandle = std::coroutine_handle<promise_type>;
+
 protected:
     CoroHandle handle;
     std::shared_future<void> fut;
-public:
 
+public:
     FutureCoro(CoroHandle h) noexcept
         : handle(h), fut(h.promise().get_future().share())
-    {}
+    {
+    }
 
-    FutureCoro(const FutureCoro&) = delete;
-    FutureCoro& operator=(const FutureCoro&) = delete;
+    FutureCoro(const FutureCoro &) = delete;
+    FutureCoro &operator=(const FutureCoro &) = delete;
 
-    FutureCoro(FutureCoro&& other) noexcept
+    FutureCoro(FutureCoro &&other) noexcept
         : handle(other.handle), fut(std::move(other.fut))
     {
-        other.handle = nullptr;   
+        other.handle = nullptr;
     }
 
     ~FutureCoro() noexcept

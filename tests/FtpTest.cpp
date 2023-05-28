@@ -21,8 +21,6 @@ TEST(FtpWithCoroutine, DownloadsFileAndReturnsName)
     std::string file = fileFuture.get();
     std::cout << file << "\n";
     ASSERT_TRUE(predicate(file));
-    using namespace std::chrono_literals;
-    std::this_thread::sleep_for(10ms); // wait for memory free
 }
 
 TEST(FtpWithCoroutine, ThrowsIfFileIsNotFound)
