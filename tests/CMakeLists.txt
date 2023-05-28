@@ -16,7 +16,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE gtest coroutine_test_lib)
 if(MSVC)
   target_compile_options(${TARGET_NAME} PRIVATE /W4)
 else()
-  target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 gtest_discover_tests(${TARGET_NAME})

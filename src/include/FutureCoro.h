@@ -65,7 +65,9 @@ public:
         }
 
         void return_value(const T& value)
+#if _MSC_VER
         noexcept(std::is_nothrow_copy_assignable<T>)
+#endif
         {
             result = value;
         }
@@ -174,14 +176,14 @@ protected:
     std::shared_future<void> fut;
 public:
 
-    FutureCoro<void>(CoroHandle h) noexcept
+    FutureCoro(CoroHandle h) noexcept
         : handle(h), fut(h.promise().get_future().share())
     {}
 
-    FutureCoro<void>(const FutureCoro<void>&) = delete;
-    FutureCoro<void>& operator=(const FutureCoro<void>&) = delete;
+    FutureCoro(const FutureCoro&) = delete;
+    FutureCoro& operator=(const FutureCoro&) = delete;
 
-    FutureCoro<void>(FutureCoro<void>&& other) noexcept
+    FutureCoro(FutureCoro&& other) noexcept
         : handle(other.handle), fut(std::move(other.fut))
     {
         other.handle = nullptr;   
