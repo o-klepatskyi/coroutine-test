@@ -4,6 +4,9 @@
 #include <future>
 #include <type_traits>
 #include <coroutine>
+#include <exception>
+
+struct nullptr_exception : std::exception {};
 
 struct async_start_awaiter
 {
@@ -16,18 +19,6 @@ struct async_start_awaiter
             LogInfo("finished execution!");
         });
         return true;
-    }
-
-    void await_resume() const noexcept {}
-};
-
-struct async_final_awaiter
-{
-    bool await_ready() const noexcept { return false; }
-
-    void await_suspend(std::coroutine_handle<> handle) const noexcept
-    {
-        handle.destroy();
     }
 
     void await_resume() const noexcept {}
@@ -69,15 +60,31 @@ public:
 
         void return_value(const T &value)
 #if _MSC_VER
-            noexcept(std::is_nothrow_copy_assignable<T>)
+            noexcept(std::is_nothrow_copy_assignable_v<T>)
 #endif
         {
-            result = value;
+            if (std::addressof(value) == nullptr)
+            {
+                try { throw nullptr_exception(); }
+                catch(...) { ex = std::current_exception(); }
+            }
+            else 
+            {
+                result = value;
+            }
         }
 
         void return_value(T &&value) noexcept(std::is_nothrow_move_constructible_v<T>)
         {
-            result = std::move(value);
+            if (std::addressof(value) == nullptr)
+            {
+                try { throw nullptr_exception(); }
+                catch(...) { ex = std::current_exception(); }
+            }
+            else 
+            {
+                result = std::move(value);
+            }
         }
 
         void unhandled_exception() noexcept
@@ -102,14 +109,14 @@ public:
     FutureCoro &operator=(const FutureCoro &) = delete;
 
     FutureCoro(FutureCoro &&other) noexcept
-        : handle(other.handle), fut(std::move(other.fut))
+        : handle(other.handle), fut(other.fut)
     {
         other.handle = nullptr;
     }
 
     ~FutureCoro() noexcept
     {
-        if (handle && fut.valid())
+        if (handle)
         {
             LogInfo("destroying...");
             fut.wait();
@@ -189,14 +196,14 @@ public:
     FutureCoro &operator=(const FutureCoro &) = delete;
 
     FutureCoro(FutureCoro &&other) noexcept
-        : handle(other.handle), fut(std::move(other.fut))
+        : handle(other.handle), fut(other.fut)
     {
         other.handle = nullptr;
     }
 
     ~FutureCoro() noexcept
     {
-        if (handle && fut.valid())
+        if (handle)
         {
             LogInfo("destroying...");
             fut.wait();

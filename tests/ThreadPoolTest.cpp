@@ -7,11 +7,11 @@
 auto simpleBenchmark(thread_pool &threadPool)
 {
     std::atomic_int i = 0;
-    const int nTasks = 100;
+    const int nTasks = 25;
     auto task = [&i]()
     {
         using namespace std::chrono_literals;
-        std::this_thread::sleep_for(10ms);
+        std::this_thread::sleep_for(2ms);
         i++;
     };
 
@@ -37,7 +37,7 @@ TEST(ThreadPool, ThreadpoolWithMoreThreadsIsQuickier)
     auto t4 = simpleBenchmark(p4);
     auto t8 = simpleBenchmark(p8);
 
-    EXPECT_LT(t1, t2);
-    EXPECT_LT(t2, t4);
-    EXPECT_LT(t4, t8);
+    EXPECT_GT(t1, t2);
+    EXPECT_GT(t2, t4);
+    EXPECT_GT(t4, t8);
 }

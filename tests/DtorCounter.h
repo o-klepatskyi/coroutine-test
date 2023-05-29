@@ -8,22 +8,27 @@ class DtorCounter
     static std::mutex mut;
     using lg = std::lock_guard<std::mutex>;
 public:
+    int state;
+
     DtorCounter() noexcept
     {
         lg l(mut);
         n_created++;
     }
+
     DtorCounter(const DtorCounter&) noexcept
     {
         lg l(mut);
         n_created++;
     }
+
     DtorCounter& operator=(const DtorCounter&) = default;
     DtorCounter(DtorCounter&&) noexcept
     {
         lg l(mut);
         n_created++;
     }
+    
     DtorCounter& operator=(DtorCounter&&) = default;
 
     ~DtorCounter() noexcept

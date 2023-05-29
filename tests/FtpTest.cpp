@@ -19,7 +19,6 @@ TEST(FtpWithCoroutine, DownloadsFileAndReturnsName)
         [](int progress) { LogInfo("Download: %d%%", progress); } );
     
     std::string file = fileFuture.get();
-    std::cout << file << "\n";
     ASSERT_TRUE(predicate(file));
 }
 
