@@ -1,8 +1,8 @@
 #pragma once
 
-#include <memory>
 #include <queue>
 #include <mutex>
+#include <optional>
 
 // @brief Locking thread-safe queue
 template <typename T>
@@ -36,12 +36,12 @@ public:
         data_queue.pop();
     }
 
-    std::shared_ptr<T> wait_and_pop()
+    std::optional<T> wait_and_pop()
     {
         std::unique_lock<std::mutex> lk(mut);
         data_cond.wait(lk, [this]
                        { return !data_queue.empty(); });
-        std::shared_ptr<T> res(std::make_shared<T>(data_queue.front()));
+        std::optional<T> res(data_queue.front());
         data_queue.pop();
         return res;
     }
@@ -56,12 +56,12 @@ public:
         return true;
     }
 
-    std::shared_ptr<T> try_pop()
+    std::optional<T> try_pop()
     {
         std::lock_guard<std::mutex> lk(mut);
         if (data_queue.empty())
-            return std::shared_ptr<T>();
-        std::shared_ptr<T> res(std::make_shared<T>(data_queue.front()));
+            return {};
+        std::optional<T> res(data_queue.front());
         data_queue.pop();
         return res;
     }
